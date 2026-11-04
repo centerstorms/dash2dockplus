@@ -1,0 +1,105 @@
+/*
+ * Dash2Dock Plus+
+ *
+ * Loaded by the extension itself in enable() (see extension.js).
+ * Everything here is either keyed on a class that the extension adds at
+ * runtime, or scoped to our own actors, so the rest of the Shell and Dash to
+ * Dock are untouched.
+ */
+
+/*
+ * No light background behind the dock icons.
+ *
+ * The Shell theme and Dash to Dock paint it on different actors (the item
+ * container, the tile, the "overview-icon" box) for both :hover and the
+ * focused application. These plain rules are the fallback; the !important
+ * copies below win against themes that use id-based selectors.
+ */
+.d2dm-no-hover-highlight .dash-item-container,
+.d2dm-no-hover-highlight .dash-item-container .overview-icon,
+.d2dm-no-hover-highlight .dash-item-container .overview-icon:hover,
+.d2dm-no-hover-highlight .dash-item-container .overview-icon:focus,
+.d2dm-no-hover-highlight .dash-item-container > StButton,
+.d2dm-no-hover-highlight .dash-item-container > StButton:hover,
+.d2dm-no-hover-highlight .dash-item-container > StButton:focus,
+.d2dm-no-hover-highlight .dash-item-container .overview-tile:hover,
+.d2dm-no-hover-highlight .dash-item-container .overview-tile.focused,
+.d2dm-no-hover-highlight .dash-item-container .overview-tile:hover .overview-icon,
+.d2dm-no-hover-highlight .dash-item-container .overview-tile.focused .overview-icon,
+.d2dm-no-hover-highlight .dash-item-container .app-well-app:hover,
+.d2dm-no-hover-highlight .dash-item-container .app-well-app.focused,
+.d2dm-no-hover-highlight .dash-item-container .app-well-app:hover .overview-icon,
+.d2dm-no-hover-highlight .dash-item-container .app-well-app.focused .overview-icon,
+.d2dm-no-hover-highlight .dash-item-container .show-apps:hover,
+.d2dm-no-hover-highlight .dash-item-container .show-apps:hover .overview-icon {
+    background-color: transparent;
+    background-image: none;
+    box-shadow: none;
+    border-color: transparent;
+}
+
+.d2dm-no-hover-highlight .dash-item-container,
+.d2dm-no-hover-highlight .dash-item-container .overview-icon,
+.d2dm-no-hover-highlight .dash-item-container .overview-icon:hover,
+.d2dm-no-hover-highlight .dash-item-container .overview-icon:focus,
+.d2dm-no-hover-highlight .dash-item-container > StButton,
+.d2dm-no-hover-highlight .dash-item-container > StButton:hover,
+.d2dm-no-hover-highlight .dash-item-container > StButton:focus,
+.d2dm-no-hover-highlight .dash-item-container .overview-tile:hover,
+.d2dm-no-hover-highlight .dash-item-container .overview-tile.focused,
+.d2dm-no-hover-highlight .dash-item-container .overview-tile:hover .overview-icon,
+.d2dm-no-hover-highlight .dash-item-container .overview-tile.focused .overview-icon,
+.d2dm-no-hover-highlight .dash-item-container .app-well-app:hover,
+.d2dm-no-hover-highlight .dash-item-container .app-well-app.focused,
+.d2dm-no-hover-highlight .dash-item-container .app-well-app:hover .overview-icon,
+.d2dm-no-hover-highlight .dash-item-container .app-well-app.focused .overview-icon,
+.d2dm-no-hover-highlight .dash-item-container .show-apps:hover,
+.d2dm-no-hover-highlight .dash-item-container .show-apps:hover .overview-icon {
+    background-color: transparent !important;
+    background-image: none !important;
+    box-shadow: none !important;
+    border-color: transparent !important;
+}
+
+/* The geometry (rotation + padding) is computed in folder.js, only the look is
+ * here; the inline style wins over these values. */
+.d2dm-fan {
+    /* The list is the top level actor of the popup: nothing may paint a panel
+     * behind it, only the pills below have a background. */
+    background-color: transparent;
+    background-image: none;
+    box-shadow: none;
+    border: none;
+    spacing: 4px;
+    padding: 0;
+}
+
+.d2dm-fan-entry {
+    background-color: transparent;
+    border-radius: 10px;
+    padding: 2px;
+}
+
+.d2dm-fan-pill {
+    background-color: rgba(0, 0, 0, 0.85);
+    border-radius: 16px;
+    padding: 6px 14px;
+    margin-right: 8px;
+}
+
+.d2dm-fan-entry:hover .d2dm-fan-pill,
+.d2dm-fan-entry:focus .d2dm-fan-pill {
+    background-color: rgba(48, 48, 48, 0.95);
+}
+
+.d2dm-fan-label {
+    color: #ffffff;
+    font-size: 11pt;
+}
+
+.d2dm-fan-message {
+    background-color: rgba(0, 0, 0, 0.78);
+    color: #ffffff;
+    border-radius: 10px;
+    padding: 6px 12px;
+}

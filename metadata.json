@@ -1,0 +1,20 @@
+{
+  "uuid": "dash2dockplus@centerstorms",
+  "name": "Dash2Dock Plus+",
+  "description": "Adds a macOS-style magnification effect to Dash to Dock: the icon under the pointer grows, its neighbours move aside and the dock bar stretches along the dock to follow the icons. The light highlight that Dash to Dock paints behind the icon under the pointer can be switched off, and a folder of your choice can be shown on the dock as a macOS-style stack that lists its 5 or 10 newest files, with the icon of your choice.\n\nThis extension does not replace Dash to Dock, it adds the effect to it, so every Dash to Dock setting keeps working. Dash to Dock (dash-to-dock@micxgx.gmail.com) must be installed and enabled.",
+  "shell-version": [
+    "45",
+    "46",
+    "47",
+    "48",
+    "49",
+    "50",
+    "51"
+  ],
+  "settings-schema": "org.gnome.shell.extensions.dash-to-dock-magnify",
+  "donations": {
+    "custom": [
+      "https://ko-fi.com/centerstorms"
+    ]
+  }
+}

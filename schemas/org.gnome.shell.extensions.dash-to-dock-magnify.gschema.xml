@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.dash-to-dock-magnify"
+          path="/org/gnome/shell/extensions/dash-to-dock-magnify/">
+
+    <key name="magnification-enabled" type="b">
+      <default>true</default>
+      <summary>Enable magnification</summary>
+      <description>
+        Grow the icon under the pointer and push the neighbouring icons aside.
+      </description>
+    </key>
+
+    <key name="magnification-strength" type="d">
+      <range min="0.05" max="1.00"/>
+      <default>0.45</default>
+      <summary>Magnification strength</summary>
+      <description>
+        How much the icon under the pointer grows. 0.45 means 1.45 times the
+        normal icon size.
+      </description>
+    </key>
+
+    <key name="magnification-radius" type="d">
+      <range min="1.0" max="6.0"/>
+      <default>3.0</default>
+      <summary>Influence radius</summary>
+      <description>
+        How many icons around the pointer are affected, in icon widths.
+      </description>
+    </key>
+
+    <key name="hover-highlight" type="b">
+      <default>true</default>
+      <summary>Highlight the icon under the pointer</summary>
+      <description>
+        Provided by Dash to Dock: a light rounded background behind the icon
+        under the pointer. Turn it off to keep the dock completely unchanged
+        while the magnification is active.
+      </description>
+    </key>
+
+    <key name="folder-enabled" type="b">
+      <default>false</default>
+      <summary>Show a folder on the dock</summary>
+      <description>
+        Add a folder button at the end of the dock. Clicking it opens a list
+        with the newest files of the folder below.
+      </description>
+    </key>
+
+    <key name="folder-path" type="s">
+      <default>''</default>
+      <summary>Folder shown on the dock</summary>
+      <description>
+        Absolute path of the folder whose contents are shown in the list.
+      </description>
+    </key>
+
+    <key name="folder-count" type="i">
+      <range min="5" max="10"/>
+      <default>10</default>
+      <summary>Number of files in the menu</summary>
+      <description>
+        How many files of the folder are shown in the list: 5 or 10. The newest
+        files come first.
+      </description>
+    </key>
+
+    <key name="folder-tilt" type="d">
+      <range min="0.0" max="30.0"/>
+      <default>0.0</default>
+      <summary>Angle of the fan</summary>
+      <description>
+        How far the list opens like a hand fan. 0 keeps the names straight and
+        the list compact, 15 to 30 turn the rows around their icon.
+      </description>
+    </key>
+
+    <key name="folder-icon" type="s">
+      <default>'folder-symbolic'</default>
+      <summary>Icon of the folder button</summary>
+      <description>
+        Name of an icon of the current icon theme, or the absolute path of an
+        image file on the computer.
+      </description>
+    </key>
+
+  </schema>
+</schemalist>

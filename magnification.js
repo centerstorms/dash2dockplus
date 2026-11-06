@@ -1012,6 +1012,15 @@ export class DockMagnifier {
             const showApps = dash?._showAppsIcon;
             if (showApps && !containers.includes(showApps))
                 containers.push(showApps);
+
+            // The folder button is a sibling of the icon box and is scaled by
+            // the effect too, so it has to be reset like every other icon.
+            for (const child of dash?._boxContainer?.get_children() ?? []) {
+                if (child === dash._box || containers.includes(child))
+                    continue;
+                if (child.child?.icon)
+                    containers.push(child);
+            }
         } catch (e) {
             return;
         }

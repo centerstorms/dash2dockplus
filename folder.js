@@ -16,6 +16,7 @@ import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
 import Pango from 'gi://Pango';
+import Shell from 'gi://Shell';
 import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
@@ -46,6 +47,39 @@ const FAN_CLICK_MARGIN = 4;
 // Space between the rows of the plain stack.
 const ROW_SPACING = 2;
 
+// Temporary diagnostics. The log is only written while the marker file exists,
+// so it costs nothing on a normal session. Remove before publishing.
+const DEBUG_MARKER = GLib.build_filenamev(
+    [GLib.get_user_cache_dir(), 'dash2dockplus-debug']);
+const DEBUG_LOG = GLib.build_filenamev(
+    [GLib.get_user_cache_dir(), 'dash2dockplus.log']);
+let debugChecked = false;
+let debugOn = false;
+
+/**
+ * Append a line to ~/.cache/dash2dockplus.log when the marker file exists.
+ *
+ * @param {string} message the line
+ */
+function debug(message) {
+    try {
+        if (!debugChecked) {
+            debugChecked = true;
+            debugOn = Gio.File.new_for_path(DEBUG_MARKER).query_exists(null);
+        }
+        if (!debugOn)
+            return;
+
+        const stream = Gio.File.new_for_path(DEBUG_LOG)
+            .append_to(Gio.FileCreateFlags.NONE, null);
+        const stamp = GLib.DateTime.new_now_local().format('%H:%M:%S');
+        stream.write_all(`${stamp} ${message}\n`, null);
+        stream.close(null);
+    } catch (e) {
+        // Diagnostics must never break the extension.
+    }
+}
+
 export class DockFolder {
     /**
      * @param {St.Widget} dash the Dash to Dock dash actor
@@ -59,8 +93,12 @@ export class DockFolder {
         this._button = null;
         this._icon = null;
         this._popup = null;
+        this._popupEventId = 0;
         this._opened = false;
         this._rows = [];
+        this._grab = null;
+        this._overviewIds = null;
+        this._dockNotified = false;
 
         this._sizeId = 0;
         this._visibilityId = 0;
@@ -73,9 +111,15 @@ export class DockFolder {
         // outside the button's allocation. The clicks are therefore caught on
         // the stage and hit tested against the transformed icon.
         this._pressedInside = false;
-        this._stageId = global.stage.connect('captured-event',
-            (actor, event) => this._onCapturedEvent(event));
+        this._stageId = global.stage.connect('captured-event', (actor, event) => {
+            // While the list holds the input grab the events are delivered to
+            // the popup alone, see _open(); the popup has its own handler.
+            if (this._grab)
+                return Clutter.EVENT_PROPAGATE;
+            return this._onCapturedEvent(event);
+        });
 
+        debug('folder: created');
         this._sync();
     }
 
@@ -111,6 +155,8 @@ export class DockFolder {
         const enabled = this._settings.get_boolean('folder-enabled');
         const path = this._settings.get_string('folder-path');
 
+        debug(`folder: sync enabled=${enabled} path="${path}"`);
+
         if (enabled && path) {
             this._ensureActor();
             this._applyIcon();
@@ -134,6 +180,7 @@ export class DockFolder {
                 this._warnedNoBox = true;
                 console.warn('[dash2dock-plus] folder: no Dash to Dock icon ' +
                     'box, the folder button is not added');
+                debug('folder: no _boxContainer, button not added');
             }
             return;
         }
@@ -191,6 +238,7 @@ export class DockFolder {
         });
 
         this._dash._boxContainer?.add_child(this._actor);
+        debug('folder: button added, icon=' + JSON.stringify(this._rect(this._icon)));
 
         try {
             this._ensurePopup();
@@ -198,6 +246,7 @@ export class DockFolder {
             console.error(`[dash2dock-plus] folder: cannot create the list ` +
                 `(${e.message})`);
             console.error(e.stack ?? '');
+            debug(`folder: popup hook failed: ${e.message}`);
         }
     }
 
@@ -269,15 +318,19 @@ export class DockFolder {
 
     _destroyPopup() {
         this._opened = false;
+        this._releaseGrab();
+        this._notifyDock(false);
 
-        if (this._overviewId) {
-            try {
-                Main.overview.disconnect(this._overviewId);
-            } catch (e) {
-                // Ignore.
+        if (this._overviewIds) {
+            for (const id of this._overviewIds) {
+                try {
+                    Main.overview.disconnect(id);
+                } catch (e) {
+                    // Ignore.
+                }
             }
-            this._overviewId = 0;
         }
+        this._overviewIds = null;
         this._popupHooked = false;
 
         if (!this._popup)
@@ -289,6 +342,7 @@ export class DockFolder {
             // Ignore.
         }
         this._popup = null;
+        this._popupEventId = 0;
         this._rows = [];
     }
 
@@ -300,7 +354,10 @@ export class DockFolder {
             return;
 
         this._popupHooked = true;
-        this._overviewId = Main.overview.connect('hiding', () => this._close());
+        this._overviewIds = [
+            Main.overview.connect('showing', () => this._close()),
+            Main.overview.connect('hiding', () => this._close()),
+        ];
     }
 
     /**
@@ -333,12 +390,24 @@ export class DockFolder {
         if (type === Clutter.EventType.BUTTON_PRESS) {
             this._pressedInside = pressedInside;
 
+            const [px, py] = event.get_coords();
+            debug(`folder: press ${Math.round(px)},${Math.round(py)} ` +
+                `hit=${pressedInside} icon=${JSON.stringify(this._rect(this._icon))} ` +
+                `button=${JSON.stringify(this._rect(this._button))}`);
+
             if (!pressedInside) {
                 // Inside the list: the row buttons handle it.
                 if (this._isInMenu(event))
                     return Clutter.EVENT_PROPAGATE;
 
+                // A click outside closes the list. Swallow that click: with
+                // the grab released mid-event it would otherwise be delivered
+                // to whatever is under the pointer (click-through).
+                const wasOpen = this._isOpen();
                 this._close();
+                return wasOpen
+                    ? Clutter.EVENT_STOP
+                    : Clutter.EVENT_PROPAGATE;
             }
 
             return Clutter.EVENT_PROPAGATE;
@@ -347,6 +416,8 @@ export class DockFolder {
         // Release: only a press and a release on the icon activate it.
         const activate = this._pressedInside && pressedInside;
         this._pressedInside = false;
+
+        debug(`folder: release hit=${pressedInside} activate=${activate}`);
 
         if (!activate)
             return Clutter.EVENT_PROPAGATE;
@@ -363,7 +434,33 @@ export class DockFolder {
      * @returns {boolean} whether the pointer is over the folder icon
      */
     _isOnButton(event) {
-        return this._contains(event, this._icon, FAN_CLICK_MARGIN);
+        // Normally the icon: it is the actor the magnifier scales, so its
+        // transformed rectangle is the one the user sees. The button is a
+        // fallback for the opposite case, where the icon rectangle is stale.
+        return this._contains(event, this._icon, FAN_CLICK_MARGIN) ||
+            this._contains(event, this._button, FAN_CLICK_MARGIN);
+    }
+
+    /**
+     * @param {St.Widget|null} actor an actor
+     * @returns {object|null} its rectangle in stage coordinates
+     */
+    _rect(actor) {
+        if (!actor)
+            return null;
+
+        try {
+            const [x, y] = actor.get_transformed_position();
+            const [w, h] = actor.get_transformed_size();
+            return {
+                x: Math.round(x),
+                y: Math.round(y),
+                w: Math.round(w),
+                h: Math.round(h),
+            };
+        } catch (e) {
+            return null;
+        }
     }
 
     /**
@@ -418,9 +515,56 @@ export class DockFolder {
         this._open();
     }
 
+    /**
+     * Tell Dash to Dock that a list of ours is open.
+     *
+     * Taking the input grab makes the dock believe that the pointer left it,
+     * and it would hide itself: its own menus emit these two signals for the
+     * very same reason. A dock that does not know them simply ignores this.
+     *
+     * @param {boolean} opened whether the list is open
+     */
+    _notifyDock(opened) {
+        if (!this._dash || this._dockNotified === opened)
+            return;
+
+        this._dockNotified = opened;
+        try {
+            this._dash.emit(opened ? 'menu-opened' : 'menu-closed');
+        } catch (e) {
+            // Another version of Dash to Dock, or a dock that only looks like
+            // it: nothing to do.
+        }
+    }
+
     _close() {
+        // Drop the grab before hiding: the list is the grab actor and it must
+        // not go away while it still owns the input.
+        this._releaseGrab();
         this._opened = false;
         this._popup?.hide();
+        this._notifyDock(false);
+    }
+
+    /**
+     * Drop the input grab taken while the list is open.
+     *
+     * The grab is what makes the Shell see the clicks that land outside of
+     * the Shell's own actors: on Wayland a click on a window or on the
+     * desktop is delivered by Mutter straight to the client when no grab is
+     * active, so the list would stay open forever.
+     */
+    _releaseGrab() {
+        if (!this._grab)
+            return;
+
+        try {
+            Main.popModal(this._grab);
+        } catch (e) {
+            // The grab may already be gone.
+        }
+
+        this._grab = null;
     }
 
     /**
@@ -460,12 +604,42 @@ export class DockFolder {
             console.error(`[dash2dock-plus] folder: cannot read the folder ` +
                 `(${e.message})`);
             console.error(e.stack ?? '');
-            return;
+            debug(`folder: rebuild failed: ${e.message}`);
+
+            // Never leave the button looking dead: say what happened.
+            try {
+                this._popup?.destroy();
+            } catch (e2) {
+                // Ignore.
+            }
+            this._rows = [];
+            const uiGroup = Main.layoutManager.uiGroup ?? Main.uiGroup;
+            this._popup = this._message('Cannot show this folder');
+            uiGroup.add_child(this._popup);
         }
 
         const popup = this._popup;
         if (!popup)
             return;
+
+        // Reactive so that the popup is part of the event delivery chain of
+        // every click that reaches it, see the captured-event handler below.
+        popup.reactive = true;
+
+        // While the list is open the popup holds the input grab, and Clutter
+        // only delivers the events to the grab actor: the stage is not part of
+        // the delivery chain any more, so a handler on the stage would never
+        // see a click outside. Listen on the popup too, exactly like the
+        // Shell's own menus do.
+        if (!this._popupEventId) {
+            this._popupEventId = popup.connect('captured-event',
+                (actor, event) => {
+                    // Without a grab the stage handler sees everything.
+                    if (!this._grab)
+                        return Clutter.EVENT_PROPAGATE;
+                    return this._onCapturedEvent(event);
+                });
+        }
 
         // The popup is the last child of the ui group, above the dock.
         try {
@@ -527,14 +701,36 @@ export class DockFolder {
         popup.set_position(Math.round(x), Math.round(y));
         popup.show();
         this._opened = true;
+        this._notifyDock(true);
+
+        // Take the input for as long as the list is open: without a grab the
+        // Shell never sees the clicks that land on a window or on the desktop
+        // (Mutter sends them to the client), and the list could not be closed
+        // by clicking anywhere outside of it. Same action mode as the Shell's
+        // own menus.
+        try {
+            this._grab = Main.pushModal(popup, {
+                actionMode: Shell.ActionMode.POPUP,
+            });
+        } catch (e) {
+            this._grab = null;
+            console.error(`[dash2dock-plus] folder: cannot grab input ` +
+                `(${e.message})`);
+        }
+
+        debug(`folder: opened at ${Math.round(x)},${Math.round(y)} ` +
+            `size=${width}x${height} rows=${this._rows.length} ` +
+            `grab=${Boolean(this._grab)}`);
     }
 
     /**
      * Fill the popup with the current contents of the folder.
      */
     _rebuild() {
+        this._releaseGrab();
         this._popup?.destroy();
         this._popup = null;
+        this._popupEventId = 0;
         this._rows = [];
 
         // A plain widget of ours, dropped straight into the ui group: there is
@@ -545,6 +741,9 @@ export class DockFolder {
 
         const path = this._settings.get_string('folder-path');
         const entries = path ? this._readFolder(path) : null;
+
+        debug(`folder: rebuild path="${path}" entries=` +
+            `${entries === null ? 'unreadable' : entries.length}`);
 
         if (!path) {
             this._popup = this._message('No folder selected');
@@ -568,7 +767,15 @@ export class DockFolder {
         // is a style property, and St overwrites the layout spacing with it on
         // every style change. Set it inline so that the rows keep it even if
         // the stylesheet is not applied.
-        const fan = new St.BoxLayout({vertical: true, style_class: 'd2dm-fan'});
+        //
+        // The old "vertical" property is gone in GNOME 49 too, and "orientation"
+        // does not exist before it: set whichever one this Shell knows, so the
+        // extension keeps working on every version it declares.
+        const fan = new St.BoxLayout({style_class: 'd2dm-fan'});
+        if (fan.orientation !== undefined)
+            fan.orientation = Clutter.Orientation.VERTICAL;
+        else if (fan.vertical !== undefined)
+            fan.vertical = true;
         fan.set_style(`spacing: ${ROW_SPACING}px;`);
 
         const rows = entries.map(entry => {
